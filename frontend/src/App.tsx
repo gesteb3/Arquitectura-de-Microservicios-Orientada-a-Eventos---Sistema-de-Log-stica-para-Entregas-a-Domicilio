@@ -216,6 +216,7 @@ function App() {
                   <tr>
                     <th>Cliente</th>
                     <th>Teléfono</th>
+                    <th>Dirección</th>
                     <th>Estado</th>
                     <th>Total</th>
                     <th>Fecha</th>
@@ -227,6 +228,7 @@ function App() {
                     <tr key={order.id}>
                       <td>{order.customer_name}</td>
                       <td>{order.customer_phone}</td>
+                      <td>{order.customer_address}</td>
                       <td>
                         <span className="badge bg-success">{order.status}</span>
                       </td>
@@ -237,7 +239,7 @@ function App() {
 
                   {orders.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="text-center text-muted">
+                      <td colSpan={6} className="text-center text-muted">
                         No hay pedidos registrados todavía.
                       </td>
                     </tr>
