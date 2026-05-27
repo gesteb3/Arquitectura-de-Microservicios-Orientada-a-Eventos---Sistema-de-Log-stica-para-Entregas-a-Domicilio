@@ -99,5 +99,17 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
 
+  frontend:
+    build:
+      context: ./frontend
+    container_name: logistics-frontend
+    restart: unless-stopped
+    depends_on:
+      - order-service
+    environment:
+      VITE_API_URL: http://localhost:3000
+    ports:
+      - "8080:5173"
+
 volumes:
   orders_pg_data:
