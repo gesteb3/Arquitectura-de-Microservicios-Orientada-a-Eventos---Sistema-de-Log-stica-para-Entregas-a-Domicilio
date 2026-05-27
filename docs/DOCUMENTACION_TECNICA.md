@@ -1,6 +1,6 @@
 # Sistema de Logística para Entregas a Domicilio
 
-## Grupo 2 y Grupo 6
+## Grupo 6
 ## Arquitectura de Microservicios Orientada a Eventos
 
 ## 1. Descripción del sistema
@@ -173,6 +173,7 @@ Los eventos implementados son:
     "status": "CREATED"
   }
 }
+```
 
 ## 13. Diagrama de arquitectura general
 

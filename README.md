@@ -110,23 +110,6 @@ Logs del servicio de notificaciones:
 docker compose logs -f notification-service
 ```
 
-## Evidencia recomendada
-
-Para demostrar el funcionamiento del sistema se recomienda capturar:
-
-- Docker Compose levantando todos los servicios.
-- Resultado de `docker compose ps`.
-- Dashboard web en `http://localhost:8080`.
-- Creación de pedido desde el frontend.
-- Tabla de pedidos recientes.
-- Resumen de ventas.
-- Endpoint `/orders`.
-- Endpoint `/orders/stats/summary`.
-- Logs de `payment-service`.
-- Logs de `inventory-service`.
-- Logs de `delivery-service`.
-- Logs de `notification-service`.
-
 ## Documentación técnica
 
 La documentación formal del proyecto está ubicada en:
