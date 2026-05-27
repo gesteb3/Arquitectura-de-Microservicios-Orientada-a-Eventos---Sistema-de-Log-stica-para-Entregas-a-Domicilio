@@ -1,19 +1,27 @@
 import { Queue, Worker } from "bullmq";
+import Redis from "ioredis";
 import { v4 as uuidv4 } from "uuid";
 
 const redisConnection = {
   host: process.env.REDIS_HOST || "localhost",
-  port: Number(process.env.REDIS_PORT || 6379)
+  port: Number(process.env.REDIS_PORT || 6379),
+  maxRetriesPerRequest: null
 };
 
 const inventarioActualizadoQueue = new Queue("InventarioActualizado", {
   connection: redisConnection
 });
 
+const trackingPublisher = new Redis(redisConnection);
+
 const processedEvents = new Set();
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function publishTrackingEvent(event) {
+  await trackingPublisher.publish("tracking-events", JSON.stringify(event));
 }
 
 async function updateInventory(event) {
@@ -61,6 +69,8 @@ async function updateInventory(event) {
       removeOnFail: false
     }
   );
+
+  await publishTrackingEvent(inventarioActualizadoEvent);
 
   console.log("Evento InventarioActualizado publicado:");
   console.log(JSON.stringify(inventarioActualizadoEvent, null, 2));

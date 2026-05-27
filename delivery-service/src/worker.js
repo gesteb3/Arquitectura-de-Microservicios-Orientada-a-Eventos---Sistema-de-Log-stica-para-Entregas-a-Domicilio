@@ -1,9 +1,11 @@
 import { Queue, Worker } from "bullmq";
+import Redis from "ioredis";
 import { v4 as uuidv4 } from "uuid";
 
 const redisConnection = {
   host: process.env.REDIS_HOST || "localhost",
-  port: Number(process.env.REDIS_PORT || 6379)
+  port: Number(process.env.REDIS_PORT || 6379),
+  maxRetriesPerRequest: null
 };
 
 const entregaAsignadaQueue = new Queue("EntregaAsignada", {
@@ -14,10 +16,16 @@ const entregaCompletadaQueue = new Queue("EntregaCompletada", {
   connection: redisConnection
 });
 
+const trackingPublisher = new Redis(redisConnection);
+
 const processedEvents = new Set();
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function publishTrackingEvent(event) {
+  await trackingPublisher.publish("tracking-events", JSON.stringify(event));
 }
 
 function assignDriver() {
@@ -90,6 +98,8 @@ async function processDelivery(event) {
     removeOnFail: false
   });
 
+  await publishTrackingEvent(entregaAsignadaEvent);
+
   console.log("Evento EntregaAsignada publicado:");
   console.log(JSON.stringify(entregaAsignadaEvent, null, 2));
 
@@ -120,6 +130,8 @@ async function processDelivery(event) {
     removeOnComplete: true,
     removeOnFail: false
   });
+
+  await publishTrackingEvent(entregaCompletadaEvent);
 
   console.log("Evento EntregaCompletada publicado:");
   console.log(JSON.stringify(entregaCompletadaEvent, null, 2));

@@ -22,12 +22,61 @@ type Summary = {
   generatedAt: string;
 };
 
+type TrackingEvent = {
+  eventId?: string;
+  eventType: string;
+  correlationId?: string;
+  occurredAt: string;
+  source: string;
+  data: {
+    orderId?: string;
+    customerName?: string;
+    message?: string;
+    paymentStatus?: string;
+    inventoryStatus?: string;
+    deliveryStatus?: string;
+    deliveredBy?: string;
+    driver?: {
+      driverName: string;
+      vehicle: string;
+    };
+  };
+};
+
+function getEventDescription(event: TrackingEvent) {
+  if (event.eventType === "PedidoCreado") {
+    return "Pedido creado y registrado en PostgreSQL";
+  }
+
+  if (event.eventType === "PagoConfirmado") {
+    return "Pago confirmado por el servicio de pagos";
+  }
+
+  if (event.eventType === "InventarioActualizado") {
+    return "Inventario actualizado y reservado";
+  }
+
+  if (event.eventType === "EntregaAsignada") {
+    return `Entrega asignada a ${event.data.driver?.driverName || "repartidor"}`;
+  }
+
+  if (event.eventType === "EntregaCompletada") {
+    return "Entrega completada exitosamente";
+  }
+
+  if (event.eventType === "CONNECTED") {
+    return "Conexión en tiempo real activa";
+  }
+
+  return event.data.message || "Evento recibido";
+}
+
 function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [trackingEvents, setTrackingEvents] = useState<TrackingEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Campos limpios por defecto
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
@@ -35,20 +84,16 @@ function App() {
 
   async function loadData() {
     setLoading(true);
-    try {
-      const ordersResponse = await fetch(`${API_URL}/orders`);
-      const ordersData = await ordersResponse.json();
 
-      const summaryResponse = await fetch(`${API_URL}/orders/stats/summary`);
-      const summaryData = await summaryResponse.json();
+    const ordersResponse = await fetch(`${API_URL}/orders`);
+    const ordersData = await ordersResponse.json();
 
-      setOrders(ordersData.orders || []);
-      setSummary(summaryData);
-    } catch (error) {
-      console.error("Error cargando datos:", error);
-    } finally {
-      setLoading(false);
-    }
+    const summaryResponse = await fetch(`${API_URL}/orders/stats/summary`);
+    const summaryData = await summaryResponse.json();
+
+    setOrders(ordersData.orders || []);
+    setSummary(summaryData);
+    setLoading(false);
   }
 
   async function createOrder(event: React.FormEvent) {
@@ -86,12 +131,6 @@ function App() {
       return;
     }
 
-    // Limpia el formulario después de enviar el pedido con éxito
-    setCustomerName("");
-    setCustomerPhone("");
-    setCustomerAddress("");
-    setTotalAmount("");
-
     await loadData();
     alert("Pedido creado correctamente");
   }
@@ -100,10 +139,31 @@ function App() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const eventSource = new EventSource(`${API_URL}/events/stream`);
+
+    eventSource.onmessage = (message) => {
+      const eventData = JSON.parse(message.data) as TrackingEvent;
+
+      setTrackingEvents((currentEvents) => {
+        const nextEvents = [eventData, ...currentEvents];
+        return nextEvents.slice(0, 10);
+      });
+    };
+
+    eventSource.onerror = () => {
+      console.error("Error en conexión SSE de eventos");
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, []);
+
   return (
     <main className="container-fluid p-4 bg-light min-vh-100">
       <div className="mb-4">
-        <h1 className="fw-bold">Sistema de Logística - Grupo 6</h1>
+        <h1 className="fw-bold">Sistema de Logística</h1>
         <p className="text-muted">
           Dashboard de microservicios orientados a eventos con Redis, BullMQ y PostgreSQL.
         </p>
@@ -151,10 +211,8 @@ function App() {
                   <label className="form-label">Cliente</label>
                   <input
                     className="form-control"
-                    placeholder="Nombre del cliente"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    required
                   />
                 </div>
 
@@ -162,10 +220,8 @@ function App() {
                   <label className="form-label">Teléfono</label>
                   <input
                     className="form-control"
-                    placeholder="Ej: 5555-5555"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
-                    required
                   />
                 </div>
 
@@ -173,10 +229,8 @@ function App() {
                   <label className="form-label">Dirección</label>
                   <input
                     className="form-control"
-                    placeholder="Dirección de entrega"
                     value={customerAddress}
                     onChange={(e) => setCustomerAddress(e.target.value)}
-                    required
                   />
                 </div>
 
@@ -185,11 +239,8 @@ function App() {
                   <input
                     className="form-control"
                     type="number"
-                    step="0.01"
-                    placeholder="0.00"
                     value={totalAmount}
                     onChange={(e) => setTotalAmount(e.target.value)}
-                    required
                   />
                 </div>
 
@@ -197,6 +248,21 @@ function App() {
                   Crear pedido
                 </button>
               </form>
+            </div>
+          </div>
+
+          <div className="card shadow-sm border-0 mt-4">
+            <div className="card-header bg-white">
+              <h5 className="mb-0">Estados de pedidos</h5>
+            </div>
+
+            <div className="card-body">
+              {summary?.ordersByStatus?.map((item) => (
+                <div key={item.status} className="d-flex justify-content-between border-bottom py-2">
+                  <span>{item.status}</span>
+                  <strong>{item.total}</strong>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -250,17 +316,40 @@ function App() {
           </div>
 
           <div className="card shadow-sm border-0 mt-4">
-            <div className="card-header bg-white">
-              <h5 className="mb-0">Estados de pedidos</h5>
+            <div className="card-header bg-white d-flex justify-content-between align-items-center">
+              <h5 className="mb-0">Eventos en tiempo real</h5>
+              <span className="badge bg-primary">SSE activo</span>
             </div>
 
             <div className="card-body">
-              {summary?.ordersByStatus?.map((item) => (
-                <div key={item.status} className="d-flex justify-content-between border-bottom py-2">
-                  <span>{item.status}</span>
-                  <strong>{item.total}</strong>
-                </div>
-              ))}
+              {trackingEvents.length === 0 && (
+                <p className="text-muted mb-0">
+                  Aún no hay eventos. Crea un pedido para ver el flujo en tiempo real.
+                </p>
+              )}
+
+              <div className="list-group">
+                {trackingEvents.map((event, index) => (
+                  <div
+                    className="list-group-item border-0 border-bottom"
+                    key={`${event.eventId || event.eventType}-${index}`}
+                  >
+                    <div className="d-flex justify-content-between">
+                      <strong>{event.eventType}</strong>
+                      <small className="text-muted">
+                        {new Date(event.occurredAt).toLocaleTimeString()}
+                      </small>
+                    </div>
+
+                    <p className="mb-1">{getEventDescription(event)}</p>
+
+                    <small className="text-muted">
+                      Servicio: {event.source}
+                      {event.correlationId ? ` | Correlation ID: ${event.correlationId}` : ""}
+                    </small>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

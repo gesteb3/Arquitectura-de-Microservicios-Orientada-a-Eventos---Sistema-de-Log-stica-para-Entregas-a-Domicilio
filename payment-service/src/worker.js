@@ -1,19 +1,27 @@
 import { Queue, Worker } from "bullmq";
+import Redis from "ioredis";
 import { v4 as uuidv4 } from "uuid";
 
 const redisConnection = {
   host: process.env.REDIS_HOST || "localhost",
-  port: Number(process.env.REDIS_PORT || 6379)
+  port: Number(process.env.REDIS_PORT || 6379),
+  maxRetriesPerRequest: null
 };
 
 const pagoConfirmadoQueue = new Queue("PagoConfirmado", {
   connection: redisConnection
 });
 
+const trackingPublisher = new Redis(redisConnection);
+
 const processedEvents = new Set();
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function publishTrackingEvent(event) {
+  await trackingPublisher.publish("tracking-events", JSON.stringify(event));
 }
 
 async function processPayment(event) {
@@ -47,7 +55,8 @@ async function processPayment(event) {
       customerName: event.data.customerName,
       totalAmount: event.data.totalAmount,
       paymentStatus: "CONFIRMED",
-      paymentMethod: "SIMULATED_CARD"
+      paymentMethod: "SIMULATED_CARD",
+      message: "Pago confirmado correctamente"
     }
   };
 
@@ -60,6 +69,8 @@ async function processPayment(event) {
     removeOnComplete: true,
     removeOnFail: false
   });
+
+  await publishTrackingEvent(pagoConfirmadoEvent);
 
   console.log("Evento PagoConfirmado publicado:");
   console.log(JSON.stringify(pagoConfirmadoEvent, null, 2));

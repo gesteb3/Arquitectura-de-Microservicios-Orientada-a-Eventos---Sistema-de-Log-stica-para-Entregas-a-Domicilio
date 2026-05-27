@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "bullmq": "^5.13.0",
+    "ioredis": "^5.4.1",
     "uuid": "^10.0.0"
   }
 }

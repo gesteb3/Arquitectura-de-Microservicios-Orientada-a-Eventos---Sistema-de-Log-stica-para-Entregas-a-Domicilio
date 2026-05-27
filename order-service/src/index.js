@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { Pool } from "pg";
 import { Queue } from "bullmq";
+import Redis from "ioredis";
 import { v4 as uuidv4 } from "uuid";
 
 const app = express();
@@ -21,12 +22,57 @@ const db = new Pool({
 
 const redisConnection = {
   host: process.env.REDIS_HOST || "localhost",
-  port: Number(process.env.REDIS_PORT || 6379)
+  port: Number(process.env.REDIS_PORT || 6379),
+  maxRetriesPerRequest: null
 };
 
 const pedidoCreadoQueue = new Queue("PedidoCreado", {
   connection: redisConnection
 });
+
+const trackingPublisher = new Redis(redisConnection);
+const trackingSubscriber = new Redis(redisConnection);
+
+const sseClients = new Set();
+
+async function publishTrackingEvent(event) {
+  await trackingPublisher.publish(
+    "tracking-events",
+    JSON.stringify({
+      eventId: event.eventId,
+      eventType: event.eventType,
+      correlationId: event.correlationId,
+      occurredAt: event.occurredAt,
+      source: event.source,
+      data: event.data
+    })
+  );
+}
+
+trackingSubscriber.subscribe("tracking-events", (error) => {
+  if (error) {
+    console.error("No se pudo suscribir al canal tracking-events:", error.message);
+    return;
+  }
+
+  console.log("order-service suscrito al canal tracking-events");
+});
+
+trackingSubscriber.on("message", (channel, message) => {
+  if (channel !== "tracking-events") {
+    return;
+  }
+
+  for (const client of sseClients) {
+    client.write(`data: ${message}\n\n`);
+  }
+});
+
+setInterval(() => {
+  for (const client of sseClients) {
+    client.write(": keep-alive\n\n");
+  }
+}, 15000);
 
 async function initializeDatabase() {
   await db.query(`
@@ -51,6 +97,30 @@ app.get("/health", async (req, res) => {
     service: "order-service",
     status: "OK",
     timestamp: new Date().toISOString()
+  });
+});
+
+app.get("/events/stream", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  res.write(
+    `data: ${JSON.stringify({
+      eventType: "CONNECTED",
+      source: "order-service",
+      occurredAt: new Date().toISOString(),
+      data: {
+        message: "Frontend conectado al stream de eventos"
+      }
+    })}\n\n`
+  );
+
+  sseClients.add(res);
+
+  req.on("close", () => {
+    sseClients.delete(res);
   });
 });
 
@@ -124,7 +194,8 @@ app.post("/orders", async (req, res, next) => {
         customerAddress,
         items,
         totalAmount,
-        status
+        status,
+        message: "Pedido creado correctamente"
       }
     };
 
@@ -137,6 +208,8 @@ app.post("/orders", async (req, res, next) => {
       removeOnComplete: true,
       removeOnFail: false
     });
+
+    await publishTrackingEvent(event);
 
     res.status(201).json({
       message: "Pedido creado correctamente",
