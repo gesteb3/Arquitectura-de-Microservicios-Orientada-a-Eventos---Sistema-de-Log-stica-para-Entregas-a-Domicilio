@@ -6,6 +6,8 @@ Este documento describe los eventos principales utilizados por la arquitectura d
 
 Los eventos son enviados y consumidos mediante Redis y BullMQ. Cada evento contiene un `eventId`, un `eventType`, un `correlationId`, una fecha de ocurrencia, el servicio de origen y la información del negocio dentro del campo `data`.
 
+Además del flujo principal de colas con BullMQ, el sistema implementa un canal de tracking en tiempo real llamado `tracking-events`, utilizado para mostrar los eventos en el frontend mediante Server-Sent Events.
+
 ## Estructura general de un evento
 
 Todos los eventos siguen una estructura común:
@@ -32,11 +34,42 @@ Todos los eventos siguen una estructura común:
 | source | Servicio que publicó el evento |
 | data | Información específica del evento |
 
+## Canal de tracking en tiempo real
+
+Además de las colas principales utilizadas para el procesamiento de negocio, el sistema utiliza un canal Redis Pub/Sub para observabilidad en tiempo real.
+
+El canal utilizado es:
+
+```txt
+tracking-events
+```
+
+Cada servicio publica una copia del evento procesado en este canal:
+
+| Servicio | Evento publicado al tracking |
+|---|---|
+| order-service | PedidoCreado |
+| payment-service | PagoConfirmado |
+| inventory-service | InventarioActualizado |
+| delivery-service | EntregaAsignada y EntregaCompletada |
+
+El `order-service` se suscribe al canal `tracking-events` y reenvía los eventos al frontend mediante el endpoint:
+
+```txt
+GET /events/stream
+```
+
+El frontend consume este endpoint usando `EventSource`, permitiendo mostrar una línea de tiempo en vivo con los eventos del pedido.
+
+Este mecanismo no procesa lógica de negocio. Su función es únicamente mostrar trazabilidad y observabilidad del flujo asíncrono.
+
 ## 1. Evento PedidoCreado
 
 ### Descripción
 
 Se publica cuando un usuario crea un pedido desde el frontend y el `order-service` lo guarda correctamente en PostgreSQL.
+
+Este evento inicia el flujo asíncrono del sistema.
 
 ### Publicador
 
@@ -54,6 +87,14 @@ payment-service
 
 ```txt
 PedidoCreado
+```
+
+### Canal de tracking
+
+También se publica una copia en:
+
+```txt
+tracking-events
 ```
 
 ### Ejemplo
@@ -85,7 +126,8 @@ PedidoCreado
       }
     ],
     "totalAmount": 150.75,
-    "status": "CREATED"
+    "status": "CREATED",
+    "message": "Pedido creado correctamente"
   }
 }
 ```
@@ -114,6 +156,14 @@ inventory-service
 PagoConfirmado
 ```
 
+### Canal de tracking
+
+También se publica una copia en:
+
+```txt
+tracking-events
+```
+
 ### Ejemplo
 
 ```json
@@ -129,7 +179,8 @@ PagoConfirmado
     "customerName": "Gustavo Esteban",
     "totalAmount": 150.75,
     "paymentStatus": "CONFIRMED",
-    "paymentMethod": "SIMULATED_CARD"
+    "paymentMethod": "SIMULATED_CARD",
+    "message": "Pago confirmado correctamente"
   }
 }
 ```
@@ -156,6 +207,14 @@ delivery-service
 
 ```txt
 InventarioActualizado
+```
+
+### Canal de tracking
+
+También se publica una copia en:
+
+```txt
+tracking-events
 ```
 
 ### Ejemplo
@@ -199,6 +258,14 @@ notification-service
 
 ```txt
 EntregaAsignada
+```
+
+### Canal de tracking
+
+También se publica una copia en:
+
+```txt
+tracking-events
 ```
 
 ### Ejemplo
@@ -250,6 +317,14 @@ notification-service
 EntregaCompletada
 ```
 
+### Canal de tracking
+
+También se publica una copia en:
+
+```txt
+tracking-events
+```
+
 ### Ejemplo
 
 ```json
@@ -284,11 +359,29 @@ EntregaAsignada
 EntregaCompletada
 ```
 
+## Flujo de tracking en tiempo real
+
+```txt
+Microservicio procesa evento
+        ↓
+Publica evento principal en BullMQ
+        ↓
+Publica copia en tracking-events
+        ↓
+order-service recibe la copia por Redis Pub/Sub
+        ↓
+order-service reenvía el evento por /events/stream
+        ↓
+frontend muestra el evento en tiempo real
+```
+
 ## Trazabilidad distribuida
 
 Todos los eventos relacionados con un mismo pedido comparten el mismo `correlationId`.
 
 Esto permite seguir el recorrido completo de un pedido desde su creación hasta su entrega final, incluso cuando el flujo se ejecuta de forma asíncrona en distintos microservicios.
+
+En el frontend, el `correlationId` se muestra junto a los eventos en tiempo real para evidenciar que todos pertenecen al mismo flujo de pedido.
 
 ## Idempotencia
 
@@ -300,12 +393,21 @@ Esto reduce el riesgo de duplicar acciones como pagos, actualizaciones de invent
 
 Los eventos publicados en BullMQ utilizan reintentos automáticos con backoff exponencial. Esto permite que si un worker falla temporalmente, BullMQ pueda intentar procesar el evento nuevamente.
 
+## Observabilidad
+
+La observabilidad del flujo se logra con dos mecanismos:
+
+1. Logs de los workers en Docker.
+2. Visualización de eventos en tiempo real desde el frontend.
+
+La visualización en tiempo real no reemplaza las colas principales de BullMQ. Solo permite observar el flujo de eventos de manera más clara durante la demostración del sistema.
+
 ## Resumen de eventos
 
-| Evento | Publicador | Consumidor | Propósito |
-|---|---|---|---|
-| PedidoCreado | order-service | payment-service | Iniciar flujo después de crear pedido |
-| PagoConfirmado | payment-service | inventory-service | Confirmar pago del pedido |
-| InventarioActualizado | inventory-service | delivery-service | Reservar o actualizar inventario |
-| EntregaAsignada | delivery-service | notification-service | Notificar asignación de repartidor |
-| EntregaCompletada | delivery-service | notification-service | Notificar entrega finalizada |
+| Evento | Publicador | Consumidor | Propósito | Tracking |
+|---|---|---|---|---|
+| PedidoCreado | order-service | payment-service | Iniciar flujo después de crear pedido | Sí |
+| PagoConfirmado | payment-service | inventory-service | Confirmar pago del pedido | Sí |
+| InventarioActualizado | inventory-service | delivery-service | Reservar o actualizar inventario | Sí |
+| EntregaAsignada | delivery-service | notification-service | Notificar asignación de repartidor | Sí |
+| EntregaCompletada | delivery-service | notification-service | Notificar entrega finalizada | Sí |

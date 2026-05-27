@@ -38,6 +38,7 @@ http://localhost:3000/health
 | GET | `/orders/:id` | Consulta un pedido específico |
 | GET | `/orders/status/:status` | Filtra pedidos por estado |
 | GET | `/orders/stats/summary` | Muestra resumen de pedidos y ventas |
+| GET | `/events/stream` | Envía eventos en tiempo real al frontend |
 
 ## Crear pedido con curl
 
@@ -76,6 +77,30 @@ curl http://localhost:3000/orders
 
 ```bash
 curl http://localhost:3000/orders/stats/summary
+```
+
+## Ver eventos en tiempo real
+
+Para visualizar el flujo de eventos, abrir el frontend:
+
+```txt
+http://localhost:8080
+```
+
+Luego crear un pedido desde el formulario. En la sección **Eventos en tiempo real** se mostrarán los eventos procesados por los microservicios:
+
+```txt
+PedidoCreado
+PagoConfirmado
+InventarioActualizado
+EntregaAsignada
+EntregaCompletada
+```
+
+También se puede verificar el stream directamente en:
+
+```txt
+http://localhost:3000/events/stream
 ```
 
 ## Ver contenedores activos
@@ -139,3 +164,6 @@ La documentación de eventos del sistema está ubicada en:
 
 ```txt
 docs/EVENTOS.md
+```
+
+Este archivo describe la estructura de los eventos, sus publicadores, consumidores, ejemplos JSON, uso de `correlationId` y el canal de tracking en tiempo real `tracking-events`.
