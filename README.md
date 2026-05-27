@@ -132,3 +132,10 @@ Ese documento incluye:
 - Endpoints implementados.
 - Evidencia recomendada.
 - Conclusión técnica.
+
+## Documentación de eventos
+
+La documentación de eventos del sistema está ubicada en:
+
+```txt
+docs/EVENTOS.md
