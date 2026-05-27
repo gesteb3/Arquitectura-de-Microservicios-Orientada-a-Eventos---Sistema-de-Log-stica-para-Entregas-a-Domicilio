@@ -51,5 +51,17 @@ services:
     ports:
       - "3000:3000"
 
+  payment-service:
+    build:
+      context: ./payment-service
+    container_name: logistics-payment-service
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
 volumes:
   orders_pg_data:
