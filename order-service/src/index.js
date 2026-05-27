@@ -157,7 +157,89 @@ app.get("/orders", async (req, res, next) => {
       ORDER BY created_at DESC;
     `);
 
-    res.status(200).json(result.rows);
+    res.status(200).json({
+      total: result.rowCount,
+      orders: result.rows
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/orders/stats/summary", async (req, res, next) => {
+  try {
+    const totalOrders = await db.query(`
+      SELECT COUNT(*)::INT AS total_orders
+      FROM orders;
+    `);
+
+    const totalSales = await db.query(`
+      SELECT COALESCE(SUM(total_amount), 0)::NUMERIC(10,2) AS total_sales
+      FROM orders;
+    `);
+
+    const ordersByStatus = await db.query(`
+      SELECT status, COUNT(*)::INT AS total
+      FROM orders
+      GROUP BY status
+      ORDER BY status ASC;
+    `);
+
+    res.status(200).json({
+      totalOrders: totalOrders.rows[0].total_orders,
+      totalSales: totalSales.rows[0].total_sales,
+      ordersByStatus: ordersByStatus.rows,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/orders/status/:status", async (req, res, next) => {
+  try {
+    const { status } = req.params;
+
+    const result = await db.query(
+      `
+      SELECT *
+      FROM orders
+      WHERE status = $1
+      ORDER BY created_at DESC;
+      `,
+      [status.toUpperCase()]
+    );
+
+    res.status(200).json({
+      status: status.toUpperCase(),
+      total: result.rowCount,
+      orders: result.rows
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/orders/:id", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const result = await db.query(
+      `
+      SELECT *
+      FROM orders
+      WHERE id = $1;
+      `,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: "Pedido no encontrado"
+      });
+    }
+
+    res.status(200).json(result.rows[0]);
   } catch (error) {
     next(error);
   }
