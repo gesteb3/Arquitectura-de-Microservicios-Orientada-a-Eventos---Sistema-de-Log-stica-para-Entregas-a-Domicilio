@@ -1,0 +1,14 @@
+{
+  "name": "delivery-service",
+  "version": "1.0.0",
+  "description": "Worker de entregas para logística orientada a eventos",
+  "type": "module",
+  "main": "src/worker.js",
+  "scripts": {
+    "start": "node src/worker.js"
+  },
+  "dependencies": {
+    "bullmq": "^5.13.0",
+    "uuid": "^10.0.0"
+  }
+}

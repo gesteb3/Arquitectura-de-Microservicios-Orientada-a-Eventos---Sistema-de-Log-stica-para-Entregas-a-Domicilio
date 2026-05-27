@@ -75,5 +75,17 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
 
+  delivery-service:
+    build:
+      context: ./delivery-service
+    container_name: logistics-delivery-service
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
 volumes:
   orders_pg_data:
