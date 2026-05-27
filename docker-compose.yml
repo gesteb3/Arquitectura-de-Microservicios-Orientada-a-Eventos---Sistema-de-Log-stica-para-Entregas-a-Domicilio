@@ -87,5 +87,17 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
 
+  notification-service:
+    build:
+      context: ./notification-service
+    container_name: logistics-notification-service
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
 volumes:
   orders_pg_data:
