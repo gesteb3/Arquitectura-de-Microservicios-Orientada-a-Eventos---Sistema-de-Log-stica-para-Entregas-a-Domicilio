@@ -293,6 +293,46 @@ app.get("/orders/status/:status", async (req, res, next) => {
   }
 });
 
+app.post("/orders/clear", async (req, res, next) => {
+  try {
+    const countResult = await db.query(`
+      SELECT COUNT(*)::INT AS total
+      FROM orders;
+    `);
+
+    await db.query(`
+      TRUNCATE TABLE orders;
+    `);
+
+    res.status(200).json({
+      message: "Pedidos eliminados correctamente",
+      deletedOrders: countResult.rows[0].total
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/orders", async (req, res, next) => {
+  try {
+    const countResult = await db.query(`
+      SELECT COUNT(*)::INT AS total
+      FROM orders;
+    `);
+
+    await db.query(`
+      TRUNCATE TABLE orders;
+    `);
+
+    res.status(200).json({
+      message: "Pedidos eliminados correctamente",
+      deletedOrders: countResult.rows[0].total
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/orders/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
