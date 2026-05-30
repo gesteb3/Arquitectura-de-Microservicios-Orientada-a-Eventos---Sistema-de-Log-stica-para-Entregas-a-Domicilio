@@ -167,3 +167,5 @@ docs/EVENTOS.md
 ```
 
 Este archivo describe la estructura de los eventos, sus publicadores, consumidores, ejemplos JSON, uso de `correlationId` y el canal de tracking en tiempo real `tracking-events`.
+
+Link de presentación: https://canva.link/p8v4yovbselmvcd 
